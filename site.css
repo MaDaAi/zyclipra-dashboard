@@ -23,3 +23,4 @@ a { color: #9AA6FF; }
 .legal code { background: var(--card); padding: 1px 5px; border-radius: 4px; }
 .legal-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .legal-table th, .legal-table td { text-align: left; vertical-align: top; padding: 8px; border-bottom: 1px solid var(--line); }
+.licence { white-space: pre-wrap; background: var(--card); padding: 12px; border-radius: 8px; font-size: 13px; }

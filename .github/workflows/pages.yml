@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Collect the site files
-        run: mkdir _site && cp index.html privacy.html terms.html cookies.html refunds.html app.js sw.js config.js style.css site.css logo.png icon.png apple-touch-icon.png icon-192.png icon-512.png manifest.webmanifest _site/
+        run: mkdir _site && cp index.html 404.html privacy.html terms.html cookies.html refunds.html eula.html third-party-notices.txt app.js sw.js config.js style.css site.css logo.png icon.png apple-touch-icon.png icon-192.png icon-512.png manifest.webmanifest _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

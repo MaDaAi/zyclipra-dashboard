@@ -5,7 +5,7 @@
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 "Segoe UI", system-ui, -apple-system, sans-serif;
-       padding: 0 12px calc(24px + env(safe-area-inset-bottom)); overflow-x: hidden; }
+       padding: 0 max(12px, env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); overflow-x: hidden; }
 .grow { flex: 1; }
 .muted { color: var(--muted); }
 .small { font-size: 12.5px; }
@@ -19,7 +19,7 @@ h3 { font-size: 14px; margin: 16px 0 6px; }
 
 /* header + navigation */
 .top { position: sticky; top: 0; z-index: 5; background: var(--bg); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
-       padding: 10px 0 8px; border-bottom: 1px solid var(--line); margin-bottom: 12px; max-width: 1200px; margin-inline: auto; }
+       padding: calc(10px + env(safe-area-inset-top)) 0 8px; border-bottom: 1px solid var(--line); margin-bottom: 12px; max-width: 1200px; margin-inline: auto; }
 .brand { font-weight: 700; font-size: 17px; }
 .conn { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); background: var(--card); padding: 3px 9px; border-radius: 999px; }
 .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
@@ -30,6 +30,14 @@ h3 { font-size: 14px; margin: 16px 0 6px; }
 .tab { flex: 1; background: transparent; border: none; color: var(--muted); font-weight: 600; font-size: 14px; padding: 9px 4px; border-radius: 6px; min-height: 40px; }
 .tab.on { background: var(--accent); color: #fff; }
 @media (min-width: 760px) { .tabs { width: auto; } .tab { flex: none; padding: 8px 14px; } }
+/* Phones: the sections become a bottom bar above the home indicator. */
+@media (max-width: 759px) {
+  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--bg); border-top: 1px solid var(--line);
+          padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
+  .tabs[hidden] { display: none; }
+  body:has(#nav:not([hidden])) { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  body:has(#nav:not([hidden])) .toast { bottom: calc(70px + env(safe-area-inset-bottom)); }
+}
 
 main.view, #login { max-width: 1200px; margin: 0 auto; }
 #login { margin-top: 30px; }

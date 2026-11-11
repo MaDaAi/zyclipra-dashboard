@@ -242,15 +242,60 @@ async function fetchLocal(c, progress) {
   return URL.createObjectURL(new Blob(parts, { type: c.kind === "screenshot" ? "image/png" : "video/mp4" }));
 }
 
+/** Bytes start..end (inclusive) of a PC clip, fetched in parallel pieces over the connection. */
+async function readRange(id, start, end) {
+  const part = 36 * 1024, offsets = [];
+  for (let o = start; o <= end; o += part) offsets.push(o);
+  const dec = (b64) => Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+  const got = new Array(offsets.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < offsets.length) {
+      const i = next++;
+      got[i] = dec((await pcCall("clip/part", { id, offset: offsets[i] })).data);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(6, offsets.length) }, worker));
+  const out = new Uint8Array(end - start + 1);
+  let at = 0;
+  for (const g of got) { const n = Math.min(g.length, out.length - at); out.set(g.subarray(0, n), at); at += n; }
+  return out.buffer.slice(0, at);
+}
+
+// The streaming helper (sw.js) asks the page for byte ranges; the page fetches them from the PC.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js?v=1").catch(() => {});
+  navigator.serviceWorker.addEventListener("message", async (ev) => {
+    if (!ev.data || ev.data.type !== "pcmedia" || !ev.ports[0]) return;
+    try {
+      const bytes = await readRange(ev.data.id, ev.data.start, ev.data.end);
+      ev.ports[0].postMessage({ bytes }, [bytes]);
+    } catch (e) { ev.ports[0].postMessage({ error: e.message }); }
+  });
+}
+
 async function openLocal(c) {
   const f = { name: (c.title || "clip") + (c.kind === "screenshot" ? ".png" : ".mp4"), local: c };
   playerFile = f;
   $("player-title").textContent = c.title || "Clip";
   $("player-meta").textContent = "On your PC · " + new Date(c.createdAt).toLocaleString() + " · " + fmtSize(Number(c.sizeBytes || 0));
   $("player-drive").hidden = true;
+  $("player-media").replaceChildren();
+  $("player").showModal();
+  if (playerUrl) { URL.revokeObjectURL(playerUrl); playerUrl = null; }
+  const size = Number(c.sizeBytes || 0);
+  if (navigator.serviceWorker && navigator.serviceWorker.controller && size > 0) {
+    // Plays straight from the PC: the player fetches only the parts it needs, so it starts at once and can seek.
+    const shot = c.kind === "screenshot";
+    const m = shot ? el("img") : el("video");
+    if (!shot) { m.controls = true; m.playsInline = true; m.preload = "metadata"; }
+    m.onerror = () => $("player-media").replaceChildren(el("p", "error-text", "Couldn't play it from your PC."));
+    m.src = "pcmedia/" + encodeURIComponent(c.id) + "/" + size + "/" + (shot ? "image" : "video");
+    $("player-media").replaceChildren(m);
+    return;
+  }
   const msg = el("p", "muted", "Copying from your PC…");
   $("player-media").replaceChildren(msg);
-  $("player").showModal();
   try {
     if (playerUrl) URL.revokeObjectURL(playerUrl);
     playerUrl = null;
@@ -295,7 +340,11 @@ $("player-download").onclick = async () => {
   if (!f) return;
   $("player-download").disabled = true;
   try {
-    if (f.local && !playerUrl) { toast("Still copying from your PC…"); return; }
+    if (f.local && !playerUrl) {
+      toast("Copying from your PC…");
+      playerUrl = await fetchLocal(f.local, (p) => { $("player-download").textContent = "Copying " + Math.round(p * 100) + "%"; });
+      $("player-download").textContent = "Download";
+    }
     const url = playerUrl || await fetchBlob(f);
     const a = el("a");
     a.href = url; a.download = f.name;

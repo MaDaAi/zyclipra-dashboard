@@ -71,9 +71,11 @@ async function onToken(r) {
   findPcs().then(connect);
 }
 
-async function gfetch(url) {
+async function gfetch(url, opts) {
   if (!gToken || Date.now() > gExpiry - 30000) { signedOut("Your Google sign-in expired. Sign in again to continue."); throw new Error("signed out"); }
-  const r = await fetch(url, { headers: { Authorization: "Bearer " + gToken } });
+  const o = Object.assign({ cache: "no-store" }, opts || {});
+  o.headers = Object.assign({ Authorization: "Bearer " + gToken }, o.headers || {});
+  const r = await fetch(url, o);
   if (r.status === 401) { signedOut("Your Google sign-in expired. Sign in again to continue."); throw new Error("signed out"); }
   if (!r.ok) throw new Error("Google Drive error " + r.status);
   return r;
@@ -254,6 +256,12 @@ async function connect() {
     })());
   }
   try { pc = tries.length ? await Promise.any(tries) : null; } catch (e) { pc = null; }
+  if (!pc) {
+    for (const l of links) {
+      if (!l.signal) continue;
+      try { pc = await rtcConnect(l); break; } catch (e) { console.warn("WebRTC:", e.message); }
+    }
+  }
   connecting = false;
   setPcState(pc ? "online" : links.length ? "offline" : "nolink");
   if (pc) { refreshStatus(); if (view === "sounds") refreshSounds(); }
@@ -278,11 +286,10 @@ function setPcState(s) {
   }[s];
   if (l) {
     const lan = l.urls.find((u) => !u.includes("127.0.0.1")) || l.urls[0];
-    $("pc-trust").href = lan + "/";
     $("pc-open").href = lan + "/";
     $("pc-fp").textContent = l.fingerprint ? "PC certificate fingerprint: " + l.fingerprint : "";
   }
-  $("pc-trust").hidden = $("pc-open").hidden = !l;
+  $("pc-open").hidden = !l;
   renderPcs();
 }
 
@@ -298,9 +305,74 @@ function renderPcs() {
   }));
 }
 
+// ---- WebRTC: works on iPhone and Android without certificate warnings. The offer/answer (with each side's
+// certificate fingerprint) go through a small file in your Google Drive; after that everything flows directly
+// between this device and the PC on your network, encrypted.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function rtcConnect(l) {
+  const peer = new RTCPeerConnection();
+  const dc = peer.createDataChannel("zyclipra");
+  try {
+    await peer.setLocalDescription(await peer.createOffer());
+    await new Promise((r) => {
+      if (peer.iceGatheringState === "complete") r();
+      peer.onicegatheringstatechange = () => peer.iceGatheringState === "complete" && r();
+      setTimeout(r, 2500);
+    });
+    const id = newId().replace(/-/g, "");
+    await gfetch("https://www.googleapis.com/upload/drive/v3/files/" + encodeURIComponent(l.signal) + "?uploadType=media", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ v: 1, id, key: l.key, offer: peer.localDescription.sdp, t: Date.now() }),
+    });
+    let answer = null;
+    for (const end = Date.now() + 15000; !answer && Date.now() < end;) {
+      await sleep(700);
+      try {
+        const j = await (await gfetch(DRIVE + "/" + encodeURIComponent(l.signal) + "?alt=media")).json();
+        if (j.id === id && typeof j.answer === "string") answer = j.answer;
+      } catch (e) { /* keep waiting */ }
+    }
+    if (!answer) throw new Error("the PC didn't answer");
+    await peer.setRemoteDescription({ type: "answer", sdp: answer });
+    await new Promise((res, rej) => {
+      if (dc.readyState === "open") res();
+      dc.onopen = res;
+      setTimeout(() => rej(new Error("couldn't reach the PC on this network")), 8000);
+    });
+  } catch (e) { peer.close(); throw e; }
+  const conn = { rtc: dc, peer, link: l, name: l.name, waiting: new Map() };
+  dc.onmessage = (e) => {
+    let m;
+    try { m = JSON.parse(e.data); } catch (x) { return; }
+    const w = conn.waiting.get(m.i);
+    if (w) { conn.waiting.delete(m.i); w(m); }
+  };
+  const lost = () => { if (pc === conn) { pc = null; setPcState("offline"); } for (const w of conn.waiting.values()) w({ s: 0 }); conn.waiting.clear(); };
+  dc.onclose = lost;
+  peer.onconnectionstatechange = () => { if (peer.connectionState === "failed" || peer.connectionState === "closed") lost(); };
+  return conn;
+}
+
+function rtcCall(conn, action, body) {
+  return new Promise((resolve) => {
+    const i = newId().replace(/-/g, "");
+    const t = setTimeout(() => { conn.waiting.delete(i); resolve({ s: 0 }); }, 30000);
+    conn.waiting.set(i, (m) => { clearTimeout(t); resolve(m); });
+    conn.rtc.send(JSON.stringify({ i, a: action, b: body || {} }));
+  });
+}
+
 /** A call to the PC. Commands carry an id so a retried tap never runs twice. */
 async function pcApi(path, body, command) {
   if (!pc) throw new Error("Your PC isn't connected.");
+  if (pc.rtc) {
+    if (path === "web/logout") { pc.peer.close(); return {}; }
+    const m = await rtcCall(pc, path, body);
+    if (!m.s) { pc = null; setPcState("offline"); throw new Error("Lost the connection to your PC."); }
+    if (m.s !== 200) throw new Error((m.b && (m.b.error || m.b.ok)) || "Your PC said no (" + m.s + ").");
+    return m.b;
+  }
   const h = { Authorization: "Bearer " + pc.token };
   if (body) h["Content-Type"] = "application/json";
   if (command) h["X-Command-Id"] = newId();

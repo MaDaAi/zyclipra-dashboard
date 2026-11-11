@@ -264,7 +264,13 @@ async function readRange(id, start, end) {
 
 // The streaming helper (sw.js) asks the page for byte ranges; the page fetches them from the PC.
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("sw.js?v=1").catch(() => {});
+  navigator.serviceWorker.register("sw.js?v=1").then(async () => {
+    await navigator.serviceWorker.ready;
+    // iPhone only lets the helper handle requests after the page loads again: do that once, before sign-in.
+    if (!navigator.serviceWorker.controller && !gToken) {
+      try { if (!sessionStorage.getItem("zy-sw")) { sessionStorage.setItem("zy-sw", "1"); location.reload(); } } catch (e) { /* storage blocked */ }
+    }
+  }).catch(() => {});
   navigator.serviceWorker.addEventListener("message", async (ev) => {
     if (!ev.data || ev.data.type !== "pcmedia" || !ev.ports[0]) return;
     try {

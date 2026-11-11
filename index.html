@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="site.css?v=3">
   <script src="config.js?v=3"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="app.js?v=5" defer></script>
+  <script src="app.js?v=6" defer></script>
 </head>
 <body>
   <header class="top">
@@ -93,6 +93,10 @@
   <!-- Clips (from Google Drive) -->
   <main id="clips-view" class="view" hidden>
     <div class="toolbar">
+      <select id="source" aria-label="Where" hidden>
+        <option value="pc">On this PC</option>
+        <option value="drive">On Google Drive</option>
+      </select>
       <input id="search" type="search" placeholder="Search clips" aria-label="Search clips">
       <select id="kind" aria-label="Show">
         <option value="">Everything</option>

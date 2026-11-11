@@ -104,6 +104,7 @@ function show(v) {
     $("tab-" + n).classList.toggle("on", n === v);
   }
   if (v === "sounds" && pc) refreshSounds();
+  if ((v === "clips" || v === "home") && pc) loadLocal();
 }
 for (const n of ["home", "clips", "sounds", "settings"]) $("tab-" + n).onclick = () => show(n);
 $("see-clips").onclick = () => show("clips");
@@ -155,12 +156,112 @@ function clipCard(f) {
 }
 
 function renderClips() {
+  const fromPc = !!pc && $("source").value === "pc";
+  $("source").hidden = !pc;
+  if (fromPc) { renderLocal(); return; }
   const s = $("search").value.trim().toLowerCase(), k = $("kind").value;
   const list = clips.filter((f) => (!s || f.name.toLowerCase().includes(s)) && (!k || f.mimeType.startsWith(k + "/")));
   $("clip-grid").replaceChildren(...list.map(clipCard));
   $("clip-stats").textContent = clips.length ? list.length + " of " + clips.length + (nextPage ? "+" : "") + " on Google Drive" : "No clips on Google Drive yet – turn on automatic upload in the Zyclipra app.";
   $("more").hidden = !nextPage;
-  $("recent").replaceChildren(...clips.slice(0, 6).map(clipCard));
+  if (!pc) $("recent").replaceChildren(...clips.slice(0, 6).map(clipCard));
+}
+
+// ---------------------------------------------------------------- clips on the PC (while connected)
+let local = [];
+const thumbCache = new Map();
+/** Any website action on the PC, over WebRTC or HTTPS alike. */
+function pcCall(action, args) { return pc && pc.rtc ? pcApi(action, args || {}) : pcApi("call", { a: action, b: args || {} }); }
+
+async function loadLocal() {
+  if (!pc) return;
+  try {
+    const j = await pcCall("clips", { limit: 120 });
+    local = Array.isArray(j) ? j : j.clips || [];
+  } catch (e) { return; }
+  renderClips();
+  $("recent").replaceChildren(...local.slice(0, 6).map(localCard));
+}
+$("source").onchange = () => renderClips();
+
+function localCard(c) {
+  const b = el("button", "clip-card");
+  const shot = c.kind === "screenshot";
+  const th = el("div", "thumb", shot ? "🖼" : "🎬");
+  const show = (url) => { const img = el("img"); img.alt = ""; img.src = url; th.textContent = ""; th.appendChild(img); };
+  if (thumbCache.has(c.id)) show(thumbCache.get(c.id));
+  else thumbQueue.push(() => pcCall("clip/thumb", { id: c.id }).then((t) => {
+    const url = "data:image/jpeg;base64," + t.data;
+    thumbCache.set(c.id, url);
+    show(url);
+  }).catch(() => {}));
+  pumpThumbs();
+  const body = el("div", "clip-body");
+  body.append(el("div", "title", c.title || "Clip"));
+  const dur = c.durationSec ? fmtTime(c.durationSec * 1000) + " · " : "";
+  body.append(el("div", "meta muted small", dur + new Date(c.createdAt).toLocaleDateString() + " · " + fmtSize(Number(c.sizeBytes || 0))));
+  b.append(th, body);
+  b.onclick = () => openLocal(c);
+  return b;
+}
+
+const thumbQueue = [];
+let thumbsBusy = 0;
+function pumpThumbs() {
+  while (thumbsBusy < 3 && thumbQueue.length) {
+    thumbsBusy++;
+    thumbQueue.shift()().finally(() => { thumbsBusy--; pumpThumbs(); });
+  }
+}
+
+function renderLocal() {
+  const s = $("search").value.trim().toLowerCase(), k = $("kind").value;
+  const list = local.filter((c) => (!s || (c.title || "").toLowerCase().includes(s))
+    && (!k || (k === "image" ? c.kind === "screenshot" : c.kind !== "screenshot")));
+  $("clip-grid").replaceChildren(...list.map(localCard));
+  $("clip-stats").textContent = local.length ? list.length + " of " + local.length + " on your PC" : "No clips on your PC yet.";
+  $("more").hidden = true;
+}
+
+/** Copies a clip from the PC in pieces (several at once), then plays it here. */
+async function fetchLocal(c, progress) {
+  const first = await pcCall("clip/part", { id: c.id, offset: 0 });
+  const size = first.size, part = 36 * 1024;
+  const parts = new Array(Math.ceil(size / part) || 1);
+  const dec = (b64) => Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+  parts[0] = dec(first.data);
+  let next = 1, done = 1;
+  const worker = async () => {
+    while (next < parts.length) {
+      const i = next++;
+      parts[i] = dec((await pcCall("clip/part", { id: c.id, offset: i * part })).data);
+      progress(++done / parts.length);
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  return URL.createObjectURL(new Blob(parts, { type: c.kind === "screenshot" ? "image/png" : "video/mp4" }));
+}
+
+async function openLocal(c) {
+  const f = { name: (c.title || "clip") + (c.kind === "screenshot" ? ".png" : ".mp4"), local: c };
+  playerFile = f;
+  $("player-title").textContent = c.title || "Clip";
+  $("player-meta").textContent = "On your PC · " + new Date(c.createdAt).toLocaleString() + " · " + fmtSize(Number(c.sizeBytes || 0));
+  $("player-drive").hidden = true;
+  const msg = el("p", "muted", "Copying from your PC…");
+  $("player-media").replaceChildren(msg);
+  $("player").showModal();
+  try {
+    if (playerUrl) URL.revokeObjectURL(playerUrl);
+    playerUrl = null;
+    const url = await fetchLocal(c, (p) => { msg.textContent = "Copying from your PC… " + Math.round(p * 100) + "%"; });
+    if (playerFile !== f) { URL.revokeObjectURL(url); return; }
+    playerUrl = url;
+    const m = c.kind === "screenshot" ? el("img") : el("video");
+    if (m.tagName === "VIDEO") { m.controls = true; m.playsInline = true; }
+    m.src = url;
+    $("player-media").replaceChildren(m);
+  } catch (e) { $("player-media").replaceChildren(el("p", "error-text", "Couldn't copy it from your PC: " + e.message)); }
 }
 
 let playerUrl = null, playerFile = null;
@@ -173,6 +274,7 @@ async function openClip(f) {
   $("player-title").textContent = f.name;
   $("player-meta").textContent = new Date(f.createdTime).toLocaleString() + " · " + fmtSize(Number(f.size || 0));
   $("player-drive").href = f.webViewLink || "https://drive.google.com";
+  $("player-drive").hidden = false;
   $("player-media").replaceChildren(el("p", "muted", "Loading from Google Drive…"));
   $("player").showModal();
   if (Number(f.size) > 300e6) { $("player-media").replaceChildren(el("p", "muted", "This one is large – use Download or open it in Google Drive.")); return; }
@@ -193,6 +295,7 @@ $("player-download").onclick = async () => {
   if (!f) return;
   $("player-download").disabled = true;
   try {
+    if (f.local && !playerUrl) { toast("Still copying from your PC…"); return; }
     const url = playerUrl || await fetchBlob(f);
     const a = el("a");
     a.href = url; a.download = f.name;
@@ -264,7 +367,8 @@ async function connect() {
   }
   connecting = false;
   setPcState(pc ? "online" : links.length ? "offline" : "nolink");
-  if (pc) { refreshStatus(); if (view === "sounds") refreshSounds(); }
+  if (pc) { $("source").value = "pc"; refreshStatus(); loadLocal(); if (view === "sounds") refreshSounds(); }
+  else renderClips();
 }
 $("pc-retry").onclick = () => findPcs().then(connect);
 
@@ -399,7 +503,11 @@ async function run(action, args, button) {
     if (j.ok && j.ok !== "true") toast(j.ok);
     return j;
   } catch (e) { toast(e.message, true); return null; }
-  finally { if (button) button.classList.remove("busy"); refreshStatus(); }
+  finally {
+    if (button) button.classList.remove("busy");
+    refreshStatus();
+    if (["replay/save", "screenshot", "recording/stop"].includes(action)) setTimeout(loadLocal, 800);
+  }
 }
 
 // ---------------------------------------------------------------- dashboard controls

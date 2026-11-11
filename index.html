@@ -6,9 +6,14 @@
   <meta name="theme-color" content="#1E2228">
   <meta name="referrer" content="no-referrer">
   <!-- connect-src needs https: because your PC's home-network address (e.g. https://192.168.1.20:47820) isn't known in advance. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https://*.googleusercontent.com https://drive.google.com; media-src blob:; connect-src 'self' https:; frame-src https://accounts.google.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; manifest-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https://*.googleusercontent.com https://drive.google.com; media-src blob:; connect-src 'self' https:; frame-src https://accounts.google.com; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Zyclipra</title>
   <link rel="icon" type="image/png" href="icon.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-title" content="Zyclipra">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="stylesheet" href="style.css?v=3">
   <link rel="stylesheet" href="site.css?v=3">
   <script src="config.js?v=3"></script>

@@ -14,32 +14,33 @@
   <meta name="apple-mobile-web-app-title" content="Zyclipra">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="style.css?v=4">
-  <link rel="stylesheet" href="site.css?v=3">
+  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="site.css?v=6">
   <script src="config.js?v=3"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="app.js?v=8" defer></script>
+  <script src="app.js?v=9" defer></script>
 </head>
 <body>
   <header class="top">
     <img src="logo.png" alt="" class="logo" width="30" height="30">
     <span class="brand">Zyclipra</span>
-    <span id="conn" class="conn" hidden><span class="conn-dot"></span><span id="conn-text">PC offline</span></span>
+    <span id="conn" class="conn" hidden><span class="conn-dot"></span><span id="conn-text" role="status" aria-live="polite">PC offline</span></span>
     <span class="grow"></span>
-    <nav id="nav" class="tabs" hidden aria-label="Sections">
-      <button id="tab-home" class="tab on">Dashboard</button>
-      <button id="tab-clips" class="tab">Clips</button>
-      <button id="tab-sounds" class="tab">Soundboard</button>
-      <button id="tab-settings" class="tab">Settings</button>
-    </nav>
   </header>
+  <nav id="nav" class="tabs" hidden aria-label="Sections">
+    <button id="tab-home" class="tab on">Dashboard</button>
+    <button id="tab-clips" class="tab">Clips</button>
+    <button id="tab-sounds" class="tab">Soundboard</button>
+    <button id="tab-settings" class="tab">Settings</button>
+  </nav>
 
   <section id="login" class="card narrow">
     <h2>Your clips, anywhere</h2>
     <p class="muted">Sign in with the Google account you connected in the Zyclipra app. You'll see the clips it uploaded to your Google Drive – and, when you're on the same Wi-Fi as your PC, you can clip and use the soundboard from here.</p>
     <button id="signin" class="primary big" disabled>Sign in with Google</button>
     <p id="login-error" class="error-text" role="alert"></p>
-    <p class="muted small">Zyclipra only asks for access to the files the Zyclipra app made. Nothing is stored in this browser after you close the tab.</p>
+    <p class="muted small">By signing in you agree to the <a href="terms.html">Terms of Use</a> and confirm you've read the <a href="privacy.html">Privacy Policy</a>.
+      Zyclipra only asks for access to the files the Zyclipra app made in your Google Drive, and doesn't keep your sign-in after you close the tab.</p>
   </section>
 
   <!-- Dashboard -->
@@ -153,6 +154,11 @@
       <a id="player-drive" class="button" href="#" target="_blank" rel="noopener noreferrer">Open in Google Drive</a>
     </div>
   </dialog>
+
+  <footer class="site-foot muted small">
+    <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · <a href="cookies.html">Cookies</a> · <a href="refunds.html">Refunds</a>
+    <span>· Zyclipra is not affiliated with Google, GitHub or Microsoft.</span>
+  </footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>

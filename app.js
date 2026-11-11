@@ -8,6 +8,8 @@
  *   PC (no relay, nothing exposed to the internet). If the browser blocks that, it explains why and links to
  *   the PC's own dashboard instead.
  */
+// GitHub Pages can't send X-Frame-Options: refuse to run inside another site's frame (clickjacking).
+if (window.top !== window.self) { document.documentElement.style.display = "none"; throw new Error("framed"); }
 const CFG = window.ZYCLIPRA || {};
 const SCOPE = "https://www.googleapis.com/auth/drive.file openid email profile";
 const DRIVE = "https://www.googleapis.com/drive/v3/files";
